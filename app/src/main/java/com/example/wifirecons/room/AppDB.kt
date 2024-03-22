@@ -7,7 +7,6 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.example.wifirecons.room.converters.Converter
 import com.example.wifirecons.room.models.Hotspot
-import com.example.wifirecons.room.models.ReconData
 
 @Database(
     entities = [Hotspot::class],
