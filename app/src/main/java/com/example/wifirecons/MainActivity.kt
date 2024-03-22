@@ -1,89 +1,113 @@
 package com.example.wifirecons
 
-import android.Manifest
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
-import androidx.activity.viewModels
+import android.util.Log
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
-import com.blackhat.wifipasswords.WifiMaster
+import androidx.core.content.ContextCompat
+import com.example.wifirecons.app.WifiRecon
+import com.example.wifirecons.data.ApiClient
+import com.example.wifirecons.data.ApiService
 import com.example.wifirecons.databinding.ActivityMainBinding
-import com.example.wifirecons.models.Hotspot
-import com.example.wifirecons.models.ReconData
-import com.example.wifirecons.room.Data
+import com.example.wifirecons.room.models.Hotspot
+import com.example.wifirecons.room.models.ReconData
 import com.example.wifirecons.ui.HotSpotAdapter
-import com.example.wifirecons.utils.Converter
-import com.example.wifirecons.viewmodel.AppViewModel
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
+import com.example.wifirecons.utils.GPSHelper
+import com.example.wifirecons.utils.LocManager
+import com.example.wifirecons.utils.Progress
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import retrofit2.Call
+import retrofit2.Response
 import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private val appViewModel: AppViewModel by viewModels()
-    private val foregroundLocationPermission = arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-    private val locationCode = 9001
-    private val foregroundAndBackgroundLocationPermission = arrayOf(
-        Manifest.permission.ACCESS_FINE_LOCATION,
-        Manifest.permission.ACCESS_BACKGROUND_LOCATION
-    )
     private val binding: ActivityMainBinding by lazy {
         ActivityMainBinding.inflate(layoutInflater)
     }
-
+    private val LOCATION_PERMISSION_REQ_CODE = 100
     private val adapter = HotSpotAdapter()
-    val wm = WifiMaster()
 
-    private val location = object : LocationCallback() {
-        override fun onLocationResult(locationResult: LocationResult) {
+    private var dataList: MutableList<Hotspot> = ArrayList()
+    private val gpsHelper by lazy { GPSHelper(this) }
+    private lateinit var progress: AlertDialog
 
-            for (location in locationResult.locations) {
-                val latitude = location.latitude
-                val longitude = location.longitude
-
-                wm.listWifiListByLatLong(
-                    latitude.toString(),
-                    longitude.toString(),
-                    onCompleted = {
-                        appViewModel.insetData(Data(it))
-                    },
-                    onError = {
-                        println("Error:: $it")
-                    })
-
-            }
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
 
 
+        progress = Progress(this).create()
+
         binding.recycler.setHasFixedSize(true)
         binding.recycler.adapter = adapter
 
-        appViewModel.fetchList().observe(this) {
-            it?.forEach { recon ->
-                val convertFrom = Converter.fromJson(recon.data, ReconData::class.java)
-                adapter.setItemList(convertFrom.hotspots)
-            }
-        }
 
 
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        checkAndRequestPermission()
+
+
 
         binding.buttonFab.setOnClickListener {
-            startLocationUpdates()
-        }
 
+            checkAndRequestPermission()
+
+
+
+            progress.show()
+
+            val gps = LocManager(this)
+            val lat = gps.latitude
+            val lon = gps.longitude
+            val url =
+                "/api3/search/?&lon=${lon}&limit_top=10&filter_blacklisted_networks=true&quality=1&token=ib_bkQIsE%2Bsfhaks%2FO%2FaIhRy%2FVe4zw%3D&locale=en_US&limit_middle=30&max_distance=10050&network=1&platform=android&version=1452&lat=${lat}&limit=75"
+            val client = ApiClient.createService(url).create(ApiService::class.java)
+
+            client.fetchWifiListByLatLong(url)
+                .enqueue(object : retrofit2.Callback<ReconData> {
+                    override fun onResponse(
+                        call: Call<ReconData>,
+                        response: Response<ReconData>
+                    ) {
+
+                        progress.dismiss()
+
+                        if (!response.isSuccessful && response.body() == null) {
+                            return
+                        }
+
+                        val reconData = response.body()
+                        reconData?.let {
+
+//                            dataList.apply {
+//                                clear()
+//                                addAll(it.hotspots!!)
+//                            }
+
+                            CoroutineScope(Dispatchers.IO).launch {
+                                WifiRecon.appDao.insertData(it)
+                            }
+
+                        }
+
+                    }
+
+                    override fun onFailure(call: Call<ReconData>, t: Throwable) {
+                        t.printStackTrace()
+                        progress.dismiss()
+                    }
+
+                })
+
+        }
 
 
         binding.edtSearch.addTextChangedListener(object : TextWatcher {
@@ -92,84 +116,58 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {
+                val filteredList = ArrayList<Hotspot>()
 
-            }
-
-            override fun afterTextChanged(p0: Editable?) {
-                val str = p0.toString()
-                val filterList: ArrayList<Hotspot> = ArrayList()
-
-                adapter.itemList().forEach {
-                    if (it.ssid.lowercase(Locale.ENGLISH).contains(str)) {
-                        filterList.add(it)
+                dataList.forEach {
+                    if (it.ssid!!.lowercase(Locale.ENGLISH).contains(p0.toString())) {
+                        filteredList.add(it)
                     }
                 }
 
-
                 runOnUiThread {
-                    adapter.setItemList(filterList)
+                    adapter.setItemList(filteredList)
                 }
+            }
+
+            override fun afterTextChanged(p0: Editable?) {
 
             }
 
         })
 
-
-
-
-
-    }
-
-    override fun onStart() {
-        super.onStart()
-        startLocationUpdates()
-    }
-
-    override fun onStop() {
-        super.onStop()
-        stopLocationUpdates()
-    }
-
-    private fun startLocationUpdates() {
-
-        val locationRequest = LocationRequest.create().apply {
-            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
-            interval = 100000 // Interval in milliseconds for receiving updates
+        WifiRecon.appDao.fetchReconData().observe(this) {
+            it.forEach { recon ->
+                dataList = recon.hotspots as MutableList<Hotspot>
+                dataList.let {
+                    adapter.setItemList(recon.hotspots)
+                }
+            }
         }
 
-        if (ActivityCompat.checkSelfPermission(
+    }
+
+    private fun checkAndRequestPermission() {
+        if (ContextCompat.checkSelfPermission(
                 this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(
                 this,
-                Manifest.permission.ACCESS_COARSE_LOCATION
+                android.Manifest.permission.ACCESS_COARSE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
 
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION),
+                LOCATION_PERMISSION_REQ_CODE
+            )
 
-            if (Build.VERSION.SDK_INT >= 30) {
-                ActivityCompat.requestPermissions(
-                    this,
-                    foregroundLocationPermission,
-                    locationCode
-                )
-            } else {
-                ActivityCompat.requestPermissions(
-                    this,
-                    foregroundAndBackgroundLocationPermission,
-                    locationCode
-                )
+        } else {
+            if (!gpsHelper.isGPSEnabled) {
+                GPSHelper.enableLocation(this, this)
             }
-
-            return
         }
-        fusedLocationClient.requestLocationUpdates(locationRequest, location, null)
-
-    }
-
-
-    private fun stopLocationUpdates() {
-        fusedLocationClient.removeLocationUpdates(location)
     }
 
     override fun onRequestPermissionsResult(
@@ -179,7 +177,26 @@ class MainActivity : AppCompatActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
-        startLocationUpdates()
+        if (requestCode == LOCATION_PERMISSION_REQ_CODE) {
+            if (grantResults.isNotEmpty()) {
+                if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Log.e("m TAG", "granted")
+
+
+                    if (!gpsHelper.isGPSEnabled) {
+                        GPSHelper.enableLocation(this, this)
+                    }
+
+
+                } else {
+                    Toast.makeText(
+                        this,
+                        "Please allow this permission to use app!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
 
     }
 }

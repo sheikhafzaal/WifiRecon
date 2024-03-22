@@ -4,7 +4,7 @@ import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.example.wifirecons.databinding.ItemHotspotBinding
-import com.example.wifirecons.models.Hotspot
+import com.example.wifirecons.room.models.Hotspot
 
 class HotSpotAdapter : RecyclerView.Adapter<HotSpotAdapter.ViewHolder>() {
 
@@ -15,7 +15,7 @@ class HotSpotAdapter : RecyclerView.Adapter<HotSpotAdapter.ViewHolder>() {
         notifyDataSetChanged()
     }
 
-    fun itemList():List<Hotspot>{
+    fun itemList(): List<Hotspot> {
         return _itemList
     }
 
@@ -30,9 +30,9 @@ class HotSpotAdapter : RecyclerView.Adapter<HotSpotAdapter.ViewHolder>() {
 
         fun bind(hotspot: Hotspot) {
             _binding.tvSsid.text = hotspot.ssid
-            _binding.tvBssid.text = hotspot.bssids.toString()
-            _binding.tvPswd.text = hotspot.password
-            _binding.tvUser.text = hotspot.user_name
+            _binding.tvBssid.text = hotspot.bssids!![0].toString()
+            _binding.tvPswd.text = hotspot.password ?: "n/a"
+            _binding.tvUser.text = hotspot.user_name ?: "n/a"
             _binding.tvCountry.text = hotspot.country
 
         }

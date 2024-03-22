@@ -10,4 +10,5 @@ object Converter{
     fun <T> fromJson(json: String, classOfT: Class<T>): T {
         return Gson().fromJson(json, classOfT)
     }
+
 }
