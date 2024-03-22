@@ -6,11 +6,11 @@ import com.google.gson.annotations.SerializedName
 import java.io.Serializable
 
 
-@Entity
+//@Entity
 data class ReconData(
 
-    @PrimaryKey(autoGenerate = true)
-    val id: Int? = null,
+//    @PrimaryKey(autoGenerate = true)
+//    val id: Int? = null,
 
     @SerializedName("hotspots")
     val hotspots: List<Hotspot> ?= null,

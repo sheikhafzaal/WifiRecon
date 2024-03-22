@@ -35,7 +35,7 @@ class MainActivity : AppCompatActivity() {
     private val LOCATION_PERMISSION_REQ_CODE = 100
     private val adapter = HotSpotAdapter()
 
-    private var dataList: MutableList<Hotspot> = ArrayList()
+    private var dataList: List<Hotspot> = ArrayList()
     private val gpsHelper by lazy { GPSHelper(this) }
     private lateinit var progress: AlertDialog
 
@@ -49,7 +49,6 @@ class MainActivity : AppCompatActivity() {
 
         binding.recycler.setHasFixedSize(true)
         binding.recycler.adapter = adapter
-
 
 
         checkAndRequestPermission()
@@ -87,13 +86,10 @@ class MainActivity : AppCompatActivity() {
                         val reconData = response.body()
                         reconData?.let {
 
-//                            dataList.apply {
-//                                clear()
-//                                addAll(it.hotspots!!)
-//                            }
-
                             CoroutineScope(Dispatchers.IO).launch {
-                                WifiRecon.appDao.insertData(it)
+                                it.hotspots?.forEach { hotSpot ->
+                                    WifiRecon.appDao.insertData(hotSpot)
+                                }
                             }
 
                         }
@@ -136,11 +132,10 @@ class MainActivity : AppCompatActivity() {
         })
 
         WifiRecon.appDao.fetchReconData().observe(this) {
-            it.forEach { recon ->
-                dataList = recon.hotspots as MutableList<Hotspot>
-                dataList.let {
-                    adapter.setItemList(recon.hotspots)
-                }
+
+            dataList = it
+            dataList.let {
+                adapter.setItemList(it)
             }
         }
 
@@ -180,8 +175,6 @@ class MainActivity : AppCompatActivity() {
         if (requestCode == LOCATION_PERMISSION_REQ_CODE) {
             if (grantResults.isNotEmpty()) {
                 if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    Log.e("m TAG", "granted")
-
 
                     if (!gpsHelper.isGPSEnabled) {
                         GPSHelper.enableLocation(this, this)

@@ -12,9 +12,9 @@ import com.example.wifirecons.room.models.ReconData
 interface AppDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertData(reconData: ReconData)
+    suspend fun insertData(hotspot: Hotspot)
 
-    @Query("select * from recondata")
-    fun fetchReconData(): LiveData<List<ReconData>>
+    @Query("select * from Hotspot")
+    fun fetchReconData(): LiveData<List<Hotspot>>
 
 }
